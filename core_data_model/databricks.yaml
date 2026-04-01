@@ -1,0 +1,25 @@
+bundle:
+  name: xio-cdm-functions
+  
+#  DO NOT SET A BUNDLE NAME IN ANY OF THE FILES BELOW!! 
+
+include:
+  # 1. GLOBAL DEFINITIONS (Load these first)
+  - ../databricks_resources/tags_and_vars.yaml
+
+  # 2. JOB-SPECIFIC DEFINITIONS
+  - ./databricks_jobs_cdm_main_system.yaml
+  - ./databricks_jobs_cdm_commentary_app.yaml
+  - ./databricks_jobs_cdm_writeback_streamlit_entry_point.yaml
+  - ./databricks_jobs_cdm_writeback_streamlit_transaction_handler.yaml
+  - ./databricks_jobs_cdm_historic_ownership.yaml
+  - ./databricks_jobs_cdm_dq_checks.yaml
+  
+  # 3. TARGET OVERRIDES (Load this LAST)
+  - ../databricks_resources/notifications.yaml
+  - ../databricks_resources/targets.yaml
+  - ../databricks_resources/permissions.yaml
+
+variables:
+  ENV:
+    default: ''

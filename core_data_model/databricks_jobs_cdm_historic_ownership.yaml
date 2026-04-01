@@ -1,0 +1,127 @@
+tags: &tags
+  area: cdm
+
+variables:
+  catalog:
+    description: Unity Catalog catalog to write to
+  database:
+    description: Schema/database to write to
+  table:
+    description: Target table name
+  table_definitions_import_path:
+    description: Python module path that exposes `column_definitions`
+
+resources:
+  jobs:
+    xio_cdm_historic_ownership:
+      name: xio_cdm_historic_ownership
+      tags: *tags
+      permissions:
+        - group_name: 'Sennen XIO Project'
+          level: CAN_MANAGE
+      max_concurrent_runs: 1
+      job_clusters:
+        - job_cluster_key: general_purpose_autoscale
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            aws_attributes:
+              first_on_demand: 1
+              availability: SPOT_WITH_FALLBACK
+              zone_id: eu-west-1a
+              spot_bid_price_percent: 100
+              ebs_volume_count: 0
+            node_type_id: md-fleet.xlarge
+            spark_env_vars:
+              PYSPARK_PYTHON: /databricks/python3/bin/python3
+            enable_elastic_disk: false
+            data_security_mode: SINGLE_USER
+            runtime_engine: PHOTON
+            autoscale:
+              min_workers: 2
+              max_workers: 6
+
+      tasks:
+        - task_key: create_cdm_historic_ownership_id_table
+          notebook_task:
+            notebook_path: ./core_data_model_historic_ownership/create_historic_ownership_id_table.ipynb
+            base_parameters:
+              bundle_target: ${bundle.target}
+              bundle_name: ${bundle.name}
+              bundle_root_path: ${workspace.root_path}
+              common_path: ${var.common_path}
+              catalog: ${var.catalog}
+              database: ${var.database}
+              table: ${var.table}
+
+          job_cluster_key: general_purpose_autoscale
+
+        - task_key: create_cdm_historic_ownership_view
+          depends_on:
+              - task_key: create_cdm_historic_ownership_id_table
+          notebook_task:
+            notebook_path: ./core_data_model_historic_ownership/create_historic_ownership_view.ipynb
+            base_parameters:
+              bundle_target: ${bundle.target}
+              bundle_name: ${bundle.name}
+              bundle_root_path: ${workspace.root_path}
+              common_path: ${var.common_path}
+              catalog: ${var.catalog}
+              database: ${var.database}
+              table: ${var.table}
+          job_cluster_key: general_purpose_autoscale
+
+        # - task_key: populate_table_definitions_in_catalog
+        #   depends_on:
+        #       - task_key: create_cdm_historic_ownership_view
+        #   notebook_task:
+        #     notebook_path: ./core_data_model_historic_ownership/update_table_and_column_descriptions.ipynb
+        #     base_parameters:
+        #       bundle_target: ${bundle.target}
+        #       bundle_name: ${bundle.name}
+        #       bundle_root_path: ${workspace.root_path}
+        #       common_path: ${var.common_path}
+        #       catalog: ${var.catalog}
+        #       database: ${var.database}
+        #       table_definitions_import_path: ${var.table_definitions_import_path}
+        #   job_cluster_key: general_purpose_autoscale
+
+targets:
+  dev:
+    variables:
+      catalog: oegen_data_prod_prod
+      database: core_data_model_dev
+      table: historic_ownership_ids__development
+      table_definitions_import_path: core_data_model.core_data_model_historic_ownership.table_definitions
+    resources:
+      jobs:
+        xio_cdm_historic_ownership:
+          schedule: null
+
+  staging:
+    variables:
+      catalog: oegen_data_prod_prod
+      database: core_data_model_dev
+      table: historic_ownership_ids
+      table_definitions_import_path: core_data_model_historic_ownership.table_definitions
+    resources:
+      jobs:
+        xio_cdm_historic_ownership:
+          schedule:
+            quartz_cron_expression: "0 30 3 ? * SUN" # 07:20 UTC Sunday
+            timezone_id: UTC
+            pause_status: UNPAUSED
+
+  prod:
+    variables:
+      catalog: oegen_data_prod_prod
+      database: core_data_model
+      table: historic_ownership_ids
+      table_definitions_import_path: core_data_model_historic_ownership.table_definitions
+    resources:
+        jobs:
+          xio_cdm_historic_ownership:
+            schedule:
+              quartz_cron_expression: "0 30 3 ? * MON-FRI" # 07:00 UTC MON-FRI
+              timezone_id: UTC
+              pause_status: UNPAUSED
+              

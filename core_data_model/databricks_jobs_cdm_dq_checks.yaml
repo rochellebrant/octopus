@@ -1,0 +1,119 @@
+tags: &tags
+  area: cdm
+
+variables:
+  common_path:
+    description: Path to the common directory containing the functions/libraries subfolders
+    default: '/Workspace/XIO/PROD/xio-common-functions/files'
+
+  source_catalog:
+    description: Unity Catalog catalog to read source tables from
+
+  source_schema:
+    description: Unity Catalog schema/database to read source tables from
+
+  dq_catalog:
+    description: Unity Catalog catalog to write DQ outputs to
+
+  dq_schema:
+    description: Schema/database for results table
+
+  dq_tbl_prefix:
+    description: Prefix for tables (e.g. bronze)
+    default: 'bronze'
+
+  dq_config_home:
+    description: Root-relative path to the config subfolder
+    default: 'files/core_data_model_dq_checks'
+
+  config_rel_path:
+    description: Path to specific table configs
+    default: 'bronze'
+
+  tables_include:
+    description: Global patterns to include
+    default: '*'
+
+  tables_exclude:
+    description: Global patterns to include
+    default: '*'
+
+  run_type:
+    description: Which checks to be run. Can be 'all' or 'standard' or 'bespoke'
+    default: 'all'
+
+resources:
+  jobs:
+    xio_cdm_dq_checks:
+      name: xio_cdm_dq_checks
+      tags: *tags
+      permissions:
+        - group_name: 'Sennen XIO Project'
+          level: CAN_MANAGE
+      max_concurrent_runs: 1
+
+      tasks:
+        - task_key: bronze_cdm_checks
+          environment_key: default
+          notebook_task:
+            notebook_path: ./core_data_model_dq_checks/dq_runner.ipynb
+            base_parameters:
+              bundle_target: ${bundle.target}
+              bundle_root_path: ${workspace.root_path}
+              common_path: ${var.common_path}
+              source_catalog: ${var.source_catalog}
+              source_schema: ${var.source_schema}
+              dq_catalog: ${var.dq_catalog}
+              dq_schema: ${var.dq_schema}
+              dq_tbl_prefix: ${var.dq_tbl_prefix}
+              dq_config_home: ${var.dq_config_home}
+              config_rel_path: ${var.config_rel_path}
+              tables_include: ${var.tables_include}
+              tables_exclude: ${var.tables_exclude}
+
+      environments:
+        - environment_key: default
+          spec:
+            client: '1'
+            dependencies:
+              - 'databricks-labs-dqx[llm]'
+
+targets:
+  dev:
+    mode: development
+    variables:
+      source_catalog: oegen_data_prod_test
+      source_schema: core_data_model
+      dq_catalog: oegen_data_prod_test
+      dq_schema: core_data_model_dq
+
+  staging:
+    mode: production
+    variables:
+      source_catalog: oegen_data_prod_prod
+      source_schema: core_data_model
+      dq_catalog: oegen_data_prod_prod
+      dq_schema: core_data_model_dq_dev
+    resources:
+      jobs:
+        xio_cdm_historic_ownership:
+          schedule:
+            quartz_cron_expression: "0 00 8 ? * SUN" # 07:20 UTC Sunday
+            timezone_id: UTC
+            pause_status: UNPAUSED
+
+  prod:
+    mode: production
+    variables:
+      source_catalog: oegen_data_prod_prod
+      source_schema: core_data_model
+      dq_catalog: oegen_data_prod_prod
+      dq_schema: core_data_model_dq
+    resources:
+        jobs:
+          xio_cdm_historic_ownership:
+            schedule:
+              quartz_cron_expression: "0 00 8 ? * MON-FRI" # 07:00 UTC MON-FRI
+              timezone_id: UTC
+              pause_status: UNPAUSED
+              
