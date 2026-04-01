@@ -1,0 +1,49 @@
+table_name: bronze_asset_platform_dim_core
+
+roles:
+  primary_keys: [asset_plat_id, START_AT]
+  system_keys: [asset_plat_id, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+  
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: is_not_null
+    name: required_fields_is_not_null_hard_check
+    criticality: error
+    params:
+      columns:
+        - asset_platform_name
+        - company_core_id
+        - geogprahic_hq
+        - activity_focus
+
+
+
+  - template: fk_exists
+    name: company_core_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [company_core_id]
+      ref_table: bronze_company_dim_core
+      ref_columns: [company_core_id]
+
+  - template: fk_exists
+    name: geogprahic_hq_fk_exists
+    criticality: error
+    params:
+      fk_columns: [geogprahic_hq]
+      ref_table: bronze_country_dim_core
+      ref_columns: [country_core_id]
+  
+
+
+
+
+  - template: string_pattern_match
+    name: asset_plat_id_format
+    criticality: warn
+    params:
+      columns: asset_plat_id
+      pattern: '^ASST_PLAT_\d{4}$'

@@ -1,0 +1,46 @@
+table_name: bronze_asset_lifecycle_transitions_dim_core
+
+roles:
+  primary_keys: [lifecycle_transition_id, START_AT]
+  system_keys: [lifecycle_transition_id, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: fk_exists
+    name: current_lifecycle_phase_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [current_lifecycle_phase_id]
+      ref_table: bronze_asset_lifecycle_phases_dim_core
+      ref_columns: [current_lifecycle_phase_id]
+
+  - template: fk_exists
+    name: next_lifecycle_phase_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [next_lifecycle_phase_id]
+      ref_table: bronze_asset_lifecycle_phases_dim_core
+      ref_columns: [current_lifecycle_phase_id]
+      allow_nulls: true
+
+  - template: fk_exists
+    name: trigger_to_next_lifecycle_phase_milestone_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [trigger_to_next_lifecycle_phase_milestone_id]
+      ref_table: bronze_asset_lifecycle_milestones_dim_core
+      ref_columns: [lifecycle_milestone_id]
+      allow_nulls: true
+
+
+
+
+  - template: string_pattern_match
+    name: lifecycle_transition_id_string_pattern
+    criticality: error
+    params:
+      columns: lifecycle_transition_id
+      pattern: "^LIFE_TRAN_\\d{4}$"  # Double backslash for YAML escaping

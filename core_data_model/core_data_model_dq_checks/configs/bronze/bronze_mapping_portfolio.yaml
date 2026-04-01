@@ -1,0 +1,23 @@
+table_name: bronze_mapping_portfolio
+
+roles:
+  primary_keys: [source_system_id, source_portfolio_name, source_portfolio_id, cdm_portfolio_id]
+
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: fk_exists
+    name: cdm_portfolio_id_fk_exists
+    criticality: warn
+    params:
+      fk_columns: ["cdm_portfolio_id"]
+      ref_table: bronze_investment_portfolio_dim_core_af
+      ref_columns: ["investment_portfolio_id"]
+
+  - template: fk_exists
+    name: source_system_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [source_system_id]
+      ref_table: bronze_mapping_system_sources
+      ref_columns: [source_system_id]

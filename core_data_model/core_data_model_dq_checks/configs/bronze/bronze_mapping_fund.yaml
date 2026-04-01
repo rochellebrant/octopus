@@ -1,0 +1,23 @@
+table_name: bronze_mapping_fund
+
+roles:
+  primary_keys: [source_system_id, source_fund_name, source_fund_id, cdm_fund_id]
+
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: fk_exists
+    name: cdm_fund_id_fk_exists
+    criticality: warn
+    params:
+      fk_columns: ["cdm_fund_id"]
+      ref_table: bronze_fund_dim_core
+      ref_columns: ["fund_core_id"]
+
+  - template: fk_exists
+    name: source_system_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [source_system_id]
+      ref_table: bronze_mapping_system_sources
+      ref_columns: [source_system_id]
