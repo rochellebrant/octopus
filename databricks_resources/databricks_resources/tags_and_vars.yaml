@@ -1,0 +1,20 @@
+variables:
+  pr_id:
+    description: "Pull request ID that triggered deployment"
+    default: "none"
+  cdm_orchestration_pause_status:
+    description: >
+      Controls the automation state of CDM pipeline jobs. 
+      Set to 'PAUSED' (default) for Dev/Staging to prevent accidental runs. 
+      Override to 'UNPAUSED' in the 'prod' target to enable automated schedules.
+      This is because some jobs only need to run in prod (e.g. clone from 
+      core_data_model to core_data_model_dev).
+      It's a variable at the "target" level essentially.
+    default: "PAUSED"
+
+presets:
+  tags:
+    team: XIO
+    bundle_target: ${bundle.target}
+    bundle_name: ${bundle.name}
+    pr_id: ${var.pr_id}

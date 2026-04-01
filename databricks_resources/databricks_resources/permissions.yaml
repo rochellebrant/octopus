@@ -1,0 +1,7 @@
+variables:
+  default_job_permissions:
+    description: Default permissions for all jobs
+    type: complex
+    default:
+      - group_name: "Sennen XIO Project"
+        level: CAN_MANAGE

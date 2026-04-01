@@ -1,0 +1,29 @@
+targets: 
+  dev:
+    mode: development
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+    variables:
+      ENV: '_DEV'
+      common_path: 'common' # append it to your repo root
+      cdm_orchestration_pause_status: "PAUSED"
+
+  staging:
+    mode: production
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+      root_path: /XIO/DEV/${bundle.name}
+    variables:
+      ENV: '_DEV'
+      common_path: '/Workspace/XIO/DEV/xio-common-functions/files'
+      cdm_orchestration_pause_status: "PAUSED"
+      
+  prod:
+    mode: production
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+      root_path: /XIO/PROD/${bundle.name}
+    variables:
+      ENV: ''
+      common_path: '/Workspace/XIO/PROD/xio-common-functions/files'
+      cdm_orchestration_pause_status: "UNPAUSED"

@@ -1,0 +1,7 @@
+variables:
+  notification_emails:
+    description: Default email recipients for job failures
+    type: complex
+    default:
+      - dataengineers@octopusenergygeneration.com
+      - benjamin.bluestone@octopusenergygeneration.com
