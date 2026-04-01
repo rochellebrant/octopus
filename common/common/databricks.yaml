@@ -1,0 +1,29 @@
+bundle:
+  name: xio-common-functions
+
+include:
+  - ../databricks_resources/notifications.yaml
+  - ../databricks_resources/tags_and_vars.yaml
+  - ../databricks_resources/targets.yaml
+  - ../databricks_resources/permissions.yaml
+
+variables:
+  ENV:
+    default: ''
+  common_path:
+    description: Path to the common functions/libraries directory
+    default: '/Workspace/XIO/PROD/xio-common-functions/files/libraries'
+    
+resources:
+  jobs:
+    xio_unit_test_functions:
+      name: xio_unit_test_functions
+      tasks:
+        - task_key: run_tests
+          description: Run entry table function tests
+          notebook_task:
+            notebook_path: ./tests/testing_entry_point.ipynb
+      email_notifications:
+        on_failure: ${var.notification_emails}
+      permissions: ${var.default_job_permissions}
+
