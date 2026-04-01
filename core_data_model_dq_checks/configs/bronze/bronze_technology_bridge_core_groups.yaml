@@ -1,0 +1,46 @@
+table_name: bronze_technology_bridge_core_groups
+
+roles:
+  primary_keys: [technology_bridge_core_id]
+  system_keys: [technology_name_id, technology_core_id, technology_group_id, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+  
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: fk_exists
+    name: technology_name_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [technology_name_id]
+      ref_table: bronze_technology_dim_names
+      ref_columns: [technology_name_id]
+  
+  - template: fk_exists
+    name: technology_core_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [technology_core_id]
+      ref_table: bronze_technology_dim_core
+      ref_columns: [technology_core_id]
+
+  - template: fk_exists
+    name: technology_group_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [technology_group_id]
+      ref_table: bronze_technology_dim_groups
+      ref_columns: [technology_groups_id]
+
+
+
+
+
+
+  - template: string_pattern_match
+    name: technology_bridge_core_id_string_pattern
+    criticality: error
+    params:
+      columns: technology_bridge_core_id
+      pattern: "^TECH_BR_CR_GRP_\\d{4}$"  # Double backslash for YAML escaping

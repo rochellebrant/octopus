@@ -1,0 +1,47 @@
+table_name: bronze_company_parent_relationship_map
+
+roles:
+  primary_keys: [rel_id, transaction_date, START_AT]
+  system_keys: [rel_id, transaction_date, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+  
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: is_not_null
+    name: required_fields_is_not_null_hard_check
+    criticality: error
+    params:
+      columns:
+        - percentage
+        - ultimate_child_id
+        - ultimate_parent_id
+        - relationship_level
+        - relationship_version
+        - existing
+
+
+
+  - template: fk_exists
+    name: ultimate_child_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [ultimate_child_id]
+      ref_table: bronze_company_dim_core
+      ref_columns: [company_core_id]
+  
+  - template: fk_exists
+    name: ultimate_parent_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [ultimate_parent_id]
+      ref_table: bronze_company_dim_core
+      ref_columns: [company_core_id]
+
+
+
+  - name: ai_invalid_percentage
+    criticality: error
+    ai_prompt: >
+      Column 'percentage' cannot exceed 100 or be negative

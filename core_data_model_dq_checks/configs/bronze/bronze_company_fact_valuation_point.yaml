@@ -1,0 +1,47 @@
+table_name: bronze_company_fact_valuation_point
+
+roles:
+  primary_keys: [company_fact_valuation_id, START_AT]
+  system_keys: [company_fact_valuation_id, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+  business_keys: [company_fact_valuation_id, active_from_date]
+  business_start_at: active_from_date
+  business_end_at: active_to_date
+
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: is_not_null
+    name: required_fields_is_not_null_hard_check
+    criticality: error
+    params:
+      columns:
+        - invp_valuation_point
+
+
+
+  - template: fk_exists
+    name: company_core_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [company_core_id]
+      ref_table: bronze_company_dim_core
+      ref_columns: [company_core_id]
+
+  - template: fk_exists
+    name: investment_portfolio_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [investment_portfolio_id]
+      ref_table: bronze_investment_portfolio_dim_core_af
+      ref_columns: [investment_portfolio_id]
+
+
+
+  - template: string_pattern_match
+    name: company_fact_valuation_id_string_pattern
+    criticality: error
+    params:
+      columns: company_fact_valuation_id
+      pattern: "^COMP_BR_INVP_\\d{4}$"  # Double backslash for YAML escaping

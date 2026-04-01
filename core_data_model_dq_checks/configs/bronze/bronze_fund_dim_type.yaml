@@ -1,0 +1,25 @@
+table_name: bronze_fund_dim_type
+
+roles:
+  primary_keys: [fund_type_id, START_AT]
+  system_keys: [fund_type_id, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+  
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: is_not_null
+    name: required_fields_is_not_null_hard_check
+    criticality: error
+    params:
+      columns:
+        - fund_type_name
+        - fund_type_description
+
+  - template: string_pattern_match
+    name: fund_type_id_string_pattern
+    criticality: error
+    params:
+      columns: fund_type_id
+      pattern: "^FUND_TYPE_DEF_\\d{4}$"  # Double backslash for YAML escaping

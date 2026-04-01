@@ -1,0 +1,18 @@
+table_name: bronze_investment_portfolio_fact_version
+
+roles:
+  system_keys: [invp_version_id, START_AT]
+  primary_keys: [invp_version_id, START_AT]
+  business_keys: [invp_version_id, active_from_date]
+  business_start_at: active_from_date
+  business_end_at: active_to_date
+  system_start_at: START_AT
+  system_end_at: END_AT
+
+checks:
+  - template: string_pattern_match
+    name: invp_version_id_format
+    criticality: warn
+    params:
+      columns: invp_version_id
+      pattern: '^INVP_VRSN_\d{4}$'

@@ -1,0 +1,34 @@
+table_name: bronze_asset_invp
+
+roles:
+  primary_keys: [asset_id, investment_portfolio_id, invp_version_id, START_AT]
+  system_keys: [asset_id, investment_portfolio_id, invp_version_id, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+  business_keys: [asset_id, investment_portfolio_id, invp_version_id, active_from_date]
+  business_start_at: active_from_date
+  business_end_at: active_to_date
+
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: fk_exists
+    name: asset_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: ["asset_id"]         # Column in current table
+      ref_columns: ["asset_id"]        # What we want to call it for the join
+      ref_table: 
+        - bronze_asset_infra_dim_core
+        - bronze_asset_platform_dim_core
+      source_ref_columns:              # The actual names in those specific tables
+        - ["asset_infra_id"]           # Maps to 1st table
+        - ["asset_plat_id"]            # Maps to 2nd table
+
+  - template: fk_exists
+    name: investment_portfolio_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [investment_portfolio_id]
+      ref_table: bronze_investment_portfolio_dim_core_af
+      ref_columns: [investment_portfolio_id]

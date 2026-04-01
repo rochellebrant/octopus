@@ -1,0 +1,46 @@
+table_name: bronze_asset_ownership_transitions_dim_core
+
+roles:
+  primary_keys: [ownership_transition_id, START_AT]
+  system_keys: [ownership_transition_id, START_AT]
+  system_start_at: START_AT
+  system_end_at: END_AT
+
+checks:
+  # table-specific checks (in addition to defaults)
+
+  - template: fk_exists
+    name: current_ownership_phase_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [current_ownership_phase_id]
+      ref_table: bronze_asset_ownership_phases_dim_core
+      ref_columns: [ownership_phase_id]
+
+  - template: fk_exists
+    name: next_ownership_phase_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [next_ownership_phase_id]
+      ref_table: bronze_asset_ownership_phases_dim_core
+      ref_columns: [ownership_phase_id]
+      allow_nulls: true
+
+  - template: fk_exists
+    name: trigger_to_next_ownership_phase_milestone_id_fk_exists
+    criticality: error
+    params:
+      fk_columns: [trigger_to_next_ownership_phase_milestone_id]
+      ref_table: bronze_asset_ownership_milestones_dim_core
+      ref_columns: [ownership_milestone_id]
+      allow_nulls: true
+
+
+
+
+  - template: string_pattern_match
+    name: ownership_transition_id_string_pattern
+    criticality: error
+    params:
+      columns: ownership_transition_id
+      pattern: "^OWNR_TRAN_\\d{4}$"  # Double backslash for YAML escaping
