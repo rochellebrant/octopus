@@ -1,0 +1,156 @@
+bundle:
+  name: xio-gems
+
+include:
+  - ../databricks_resources/notifications.yaml
+  - ../databricks_resources/tags_and_vars.yaml
+  - ../databricks_resources/permissions.yaml
+
+variables:
+    pr_id:
+      description: GitHub pull request number (set by CI)
+      default: 'none'
+    ENV:
+      description: 'Environment variable used across notebooks + DLT (DEV in dev/staging, empty in prod)'
+      default: 'DEV'
+    common_path:
+      description: Path to the common functions/libraries directory
+      default: '/Workspace/XIO/PROD/xio-common-functions/files/libraries'
+    catalog:
+      description: 'The target Unity Catalog'
+      default: 'none'
+    database:
+      description: 'The target schema/database'
+      default: 'none'
+  
+resources:
+  jobs:
+    xio_gems:
+      name: xio_gems
+      parameters:
+        - name: ENV
+          default: ${var.ENV}
+      email_notifications:
+        on_failure: ${var.notification_emails}
+      permissions: ${var.default_job_permissions}
+
+      tasks:
+        - task_key: api_ingestion_scd2
+          notebook_task:
+            notebook_path: ./ingestion/gems_api_ingestion_load.ipynb
+            base_parameters:
+              ENV: ${var.ENV}
+              catalog: 'oegen_data_prod_source' 
+              database: 'gems'
+
+        - task_key: bronze_dlt
+          depends_on:
+            - task_key: api_ingestion_scd2
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.bronze_pipeline.id}
+            full_refresh: false
+        
+        - task_key: silver_entry
+          depends_on:
+            - task_key: bronze_dlt
+          notebook_task:
+            notebook_path: ./silver_layer/silver_models/silver_entry.ipynb
+            base_parameters:
+              ENV: ${var.ENV}
+              catalog: 'oegen_data_prod_source' 
+              database: 'gems'
+        
+        - task_key: silver_dlt
+          depends_on:
+            - task_key: silver_entry
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.silver_pipeline.id}
+            full_refresh: false
+
+        - task_key: gold_entry
+          depends_on:
+            - task_key: silver_dlt
+          notebook_task:
+            notebook_path: ./gold_layer/gold_models/gold_entry.ipynb
+            base_parameters:
+              BUNDLE_ENV: ${var.ENV}
+              BUNDLE_TARGET: ${bundle.target}
+
+  pipelines:
+    bronze_pipeline:
+      name: xio_gems_bronze_pipeline_${bundle.target}
+      catalog: oegen_data_prod_source
+      schema: gems
+      serverless: true
+      configuration:
+        spark.xio.bundle_env: ${var.ENV}
+        spark.xio.bundle_target: ${bundle.target}
+      permissions:
+        - group_name: 'Sennen XIO Project'
+          level: CAN_MANAGE
+      continuous: false
+      edition: advanced
+      libraries:
+        - notebook: 
+            path: ./bronze_layer/bronze_dlt_load.py
+
+    silver_pipeline:
+      name: xio_gems_silver_pipeline_${bundle.target}
+      catalog: oegen_data_prod_prod
+      schema: gems
+      serverless: true
+      configuration:
+        spark.xio.bundle_env: ${var.ENV}
+        spark.xio.bundle_target: ${bundle.target}
+      permissions:
+        - group_name: 'Sennen XIO Project'
+          level: CAN_MANAGE
+      continuous: false
+      edition: advanced
+      libraries:
+        - notebook: 
+            path: ./silver_layer/silver_dlt_load.py
+
+
+targets:
+  dev:
+    mode: development
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+    variables:
+      ENV: 'DEV'
+    resources:
+      jobs:
+        xio_gems:
+          schedule: null
+
+  staging:
+    mode: production
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+      root_path: /XIO/DEV/${bundle.name}
+    variables:
+      ENV: 'DEV'
+    resources:
+      jobs:
+        xio_gems:
+          schedule:
+            quartz_cron_expression: '0 20 7 ? * SUN'   # 07:20 UTC Sunday
+            timezone_id: UTC
+            pause_status: UNPAUSED
+
+  prod:
+    mode: production
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+      root_path: /XIO/PROD/${bundle.name}
+    variables:
+      ENV: ''
+    resources:
+        jobs:
+          xio_gems:
+            schedule:
+              quartz_cron_expression: '0 0 7 ? * MON-FRI'    # 07:00 UTC MON-FRI
+              timezone_id: UTC
+              pause_status: UNPAUSED
+              
