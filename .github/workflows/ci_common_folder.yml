@@ -1,0 +1,50 @@
+name: XIO Common Folder CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - staging 
+    paths:
+      - common/**
+
+concurrency:
+  group: databricks-${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  DATABRICKS_HOST: ${{ secrets.XIO_DATABRICKS_HOST }}
+  DATABRICKS_CLIENT_ID: ${{secrets.XIO_DATABRICKS_CLIENT_ID}}
+  DATABRICKS_CLIENT_SECRET: ${{secrets.XIO_DATABRICKS_CLIENT_SECRET}}
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # - name: Check code formatting with Black
+      #   run: |
+      #     pip install black
+      #     # The --check flag enforces the standard. The pipeline fails here if code is unformatted.
+      #     black --check common/ 
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Deploy and Test in Isolated PR Environment
+        run: |
+          set -euo pipefail
+          cd common
+          
+          echo "Deploying isolated PR Bundle..."
+          databricks bundle deploy -t pr --var="pr_number=${{ github.event.pull_request.number }}"
+
+          echo "Running Serverless Unit Tests..."
+          databricks bundle run xio_unit_test_functions -t pr --var="pr_number=${{ github.event.pull_request.number }}"
