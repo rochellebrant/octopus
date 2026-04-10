@@ -1,1 +1,0 @@
-test_script = """SELECT HELLO_WORLD FROM XIO_TEAM"""
