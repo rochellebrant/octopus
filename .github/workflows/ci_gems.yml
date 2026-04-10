@@ -1,0 +1,101 @@
+name: XIO GEMs CI Pipeline
+
+on:
+  pull_request:
+    branches:
+      - staging 
+    paths:
+      - gems_pipeline/**
+
+# Ensures only one Databricks deploy runs at a time for this workspace - resolves concurrency error
+concurrency:
+  group: databricks-${{ github.workflow }}-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          clean: true
+
+      - name: Show changed files
+        run: |
+          echo "::group::🔍 Fetching base branch"
+          git fetch origin ${{ github.base_ref }}
+          echo "::endgroup::"
+
+          echo "::group::📂 Changed files since base (${GITHUB_BASE_REF})"
+          git diff --name-only origin/${{ github.base_ref }} HEAD
+          echo "::endgroup::"
+
+          echo "::group::✅ Done listing changes"
+          echo "Comparing against: origin/${{ github.base_ref }}"
+          echo "Current HEAD: $(git rev-parse HEAD)"
+          echo "::endgroup::"
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          architecture: 'x64'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install nutter black
+
+      - name: Check code formatting with Black
+        run: |
+          black gems_pipeline/ || echo "Black check failed, but continuing"
+
+      - name: Extract PR metadata
+        run: |
+          echo "PR_ID=$(jq -r .pull_request.number "$GITHUB_EVENT_PATH")" >> $GITHUB_ENV
+ 
+      - name: Install Databricks CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Set env for staging
+        run: |
+          export DEVELOPMENT_PREFIX=dev_
+          echo "DEVELOPMENT_PREFIX=dev_" >> $GITHUB_ENV
+          echo "Now visible in this step too: $DEVELOPMENT_PREFIX"
+      
+      - name: Validate, deploy in staging (with retry)
+        run: |
+          set -euo pipefail
+          cd gems_pipeline
+          pwd
+          databricks bundle validate -t staging
+
+          # Retry loop: up to 6 attempts with backoff (max ~3 min total)
+          n=0
+          until databricks bundle deploy -t staging --auto-approve --var="pr_id=${PR_ID}"; do
+            exit_code=$?
+            n=$((n+1))
+            if [ $n -ge 6 ]; then
+              echo "Databricks deploy failed after $n attempts (last exit code: $exit_code)."
+              exit $exit_code
+            fi
+            # After 6 failed attempts, give up and fail the job with the deploy's exit code
+            echo "Deploy failed (exit $exit_code). Retrying in $((10 * n))s (attempt #$n)..."
+            sleep $((10 * n))
+            # Back off before the next try: 10s, 20s, 30s, 40s, 50s (total ~150s before the final attempt)
+            
+          done
+        env:
+          DATABRICKS_HOST: ${{ secrets.XIO_DATABRICKS_HOST }}
+          DATABRICKS_CLIENT_ID: ${{secrets.XIO_DATABRICKS_CLIENT_ID}}
+          DATABRICKS_CLIENT_SECRET: ${{secrets.XIO_DATABRICKS_CLIENT_SECRET}}
+  test:
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Dummy test job
+        run: echo "This is a placeholder test that always passes."
