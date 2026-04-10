@@ -1,0 +1,54 @@
+name: Cleanup XIO Common PR Environment
+
+# This explicitly triggers ONLY when a PR is closed or merged
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - staging 
+    paths:
+      - common/**
+
+env:
+  DATABRICKS_HOST: ${{ secrets.XIO_DATABRICKS_HOST }}
+  DATABRICKS_CLIENT_ID: ${{secrets.XIO_DATABRICKS_CLIENT_ID}}
+  DATABRICKS_CLIENT_SECRET: ${{secrets.XIO_DATABRICKS_CLIENT_SECRET}}
+
+jobs:
+  destroy_bundle:
+    name: Destroy Common Unit Tests PR Bundle
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Destroy Isolated PR Environment
+        run: |
+          set -euo pipefail
+          cd common
+          PR_ID="pr-${{ github.event.pull_request.number }}"
+
+          echo "Targeting cleanup for: $PR_ID"
+
+          # 1. Standard Bundle Destroy
+          databricks bundle destroy -t pr --var="pr_number=${{ github.event.pull_request.number }}" --auto-approve || true
+
+          # 2. TARGETED JOB DELETION (The "Insurance" Policy)
+          # This finds the Job ID by searching for the name and then deletes it explicitly
+          JOB_ID=$(databricks jobs list --output json | jq -r ".jobs[] | select(.settings.name | contains(\"$PR_ID\")) | .job_id")
+          
+          if [ ! -z "$JOB_ID" ]; then
+            for id in $JOB_ID; do
+              echo "Deleting Job ID: $id"
+              databricks jobs delete --job-id $id
+            done
+          else
+            echo "No matching Jobs found for $PR_ID"
+          fi
+
+          # 3. Workspace Folder Cleanup
+          databricks workspace rm -r "/Workspace/Shared/.bundle/xio-common-functions/$PR_ID" || true
