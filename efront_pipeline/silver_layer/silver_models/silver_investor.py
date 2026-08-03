@@ -1,0 +1,4 @@
+silver_investor_sql_code = """
+SELECT *, current_timestamp() AS refresh_timestamp
+FROM {bronze_prefix}investor
+"""
