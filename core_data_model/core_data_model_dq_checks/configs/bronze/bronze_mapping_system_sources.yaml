@@ -1,7 +1,0 @@
-table_name: bronze_mapping_system_sources
-
-roles:
-  primary_keys: [source_system_id, source_system_name, START_AT]
-
-checks:
-  # table-specific checks (in addition to defaults)
