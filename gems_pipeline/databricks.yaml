@@ -1,0 +1,217 @@
+bundle:
+  name: xio-gems
+
+include:
+  - ../databricks_resources/notifications.yaml
+  - ../databricks_resources/tags.yaml
+  - ../databricks_resources/vars.yaml
+  - ../databricks_resources/permissions.yaml
+
+variables:
+    pr_id:
+      description: GitHub pull request number (set by CI)
+      default: 'none'
+    ENV:
+      description: 'Environment variable used across notebooks + DLT (DEV in dev/staging, empty in prod)'
+      default: 'DEV'
+    common_path:
+      description: Path to the common functions/libraries directory
+      default: '/Workspace/XIO/PROD/xio-common-functions/files/libraries'
+    development_prefix:
+      description: "Prefix for database objects"
+      default: "${workspace.current_user.short_name}_"
+    data_catalog:
+      description: 'Per-target catalog for all gems layer tables'
+      default: 'oegen_data_prod_test'
+    landing_schema:
+      description: 'Schema for raw ingested/landing tables'
+      default: 'gems_landing'
+    bronze_schema:
+      description: 'Schema for bronze layer tables'
+      default: 'gems_bronze'
+    silver_schema:
+      description: 'Schema for silver layer tables'
+      default: 'gems_silver'
+    gold_schema:
+      description: 'Schema for gold layer tables'
+      default: 'gems_gold'
+  
+resources:
+  jobs:
+    xio_gems:
+      name: xio_gems_${bundle.target}
+      parameters:
+        - name: ENV
+          default: ${var.ENV}
+      email_notifications:
+        on_failure: ${var.notification_emails}
+      permissions: ${var.default_job_permissions}
+
+      tasks:
+        - task_key: api_ingestion_scd2
+          notebook_task:
+            notebook_path: ./ingestion/gems_api_ingestion_load.ipynb
+            base_parameters:
+              development_prefix: ${var.development_prefix}
+              bundle_target: ${bundle.target}
+              catalog: ${var.data_catalog}
+              database: ${var.landing_schema}
+
+        - task_key: bronze_tombstone_generation
+          depends_on:
+            - task_key: api_ingestion_scd2
+          notebook_task:
+            notebook_path: ./bronze_layer/bronze_gems_tombstone_runner.ipynb
+            base_parameters:
+              development_prefix: ${var.development_prefix}
+              bundle_target: ${bundle.target}
+              catalog: ${var.data_catalog}
+              database: ${var.landing_schema}
+
+        - task_key: bronze_dlt
+          depends_on:
+            - task_key: bronze_tombstone_generation
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.bronze_pipeline.id}
+            full_refresh: false
+        
+        - task_key: silver_entry
+          depends_on:
+            - task_key: bronze_dlt
+          notebook_task:
+            notebook_path: ./silver_layer/silver_models/silver_entry.ipynb
+            base_parameters:
+              development_prefix: ${var.development_prefix}
+              bundle_target: ${bundle.target}
+              DATA_CATALOG: ${var.data_catalog}
+              LANDING_SCHEMA: ${var.landing_schema}
+              BRONZE_SCHEMA: ${var.bronze_schema}
+              SILVER_SCHEMA: ${var.silver_schema}
+              GOLD_SCHEMA: ${var.gold_schema}
+
+        - task_key: silver_tombstone_generation
+          depends_on:
+            - task_key: silver_entry
+          notebook_task:
+            notebook_path: ./silver_layer/silver_gems_tombstone_runner.ipynb
+            base_parameters:
+              development_prefix: ${var.development_prefix}
+              bundle_target: ${bundle.target}
+              catalog: ${var.data_catalog}
+              database: ${var.silver_schema}
+        
+        - task_key: silver_dlt
+          depends_on:
+            - task_key: silver_tombstone_generation
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.silver_pipeline.id}
+            full_refresh: false
+
+        - task_key: gold_entry
+          depends_on:
+            - task_key: silver_dlt
+          notebook_task:
+            notebook_path: ./gold_layer/gold_models/gold_entry.ipynb
+            base_parameters:
+              development_prefix: ${var.development_prefix}
+              bundle_target: ${bundle.target}
+              table_parameters_module: "gold_model_parameters"
+              view_parameters_module: "gold_view_parameters"
+              definitions_module: "gold_layer_definitions"
+              DATA_CATALOG: ${var.data_catalog}
+              LANDING_SCHEMA: ${var.landing_schema}
+              BRONZE_SCHEMA: ${var.bronze_schema}
+              SILVER_SCHEMA: ${var.silver_schema}
+              GOLD_SCHEMA: ${var.gold_schema}
+
+  pipelines:
+    bronze_pipeline:
+      name: xio_gems_bronze_pipeline_${bundle.target}
+      catalog: ${var.data_catalog}
+      schema: ${var.bronze_schema}
+      serverless: true
+      configuration:
+        spark.xio.bundle_env: ${var.ENV}
+        spark.xio.bundle_target: ${bundle.target}
+        spark.xio.development_prefix: ${var.development_prefix}
+        xio.data_catalog: ${var.data_catalog}
+        xio.landing_schema: ${var.landing_schema}
+        xio.bronze_schema: ${var.bronze_schema}
+        xio.silver_schema: ${var.silver_schema}
+        xio.gold_schema: ${var.gold_schema}
+      permissions:
+        - group_name: 'Sennen XIO Project'
+          level: CAN_MANAGE
+      continuous: false
+      edition: advanced
+      libraries:
+        - notebook:
+            path: ./bronze_layer/bronze_dlt_load.py
+
+    silver_pipeline:
+      name: xio_gems_silver_pipeline_${bundle.target}
+      catalog: ${var.data_catalog}
+      schema: ${var.silver_schema}
+      serverless: true
+      configuration:
+        spark.xio.bundle_env: ${var.ENV}
+        spark.xio.bundle_target: ${bundle.target}
+        spark.xio.development_prefix: ${var.development_prefix}
+        xio.data_catalog: ${var.data_catalog}
+        xio.landing_schema: ${var.landing_schema}
+        xio.bronze_schema: ${var.bronze_schema}
+        xio.silver_schema: ${var.silver_schema}
+        xio.gold_schema: ${var.gold_schema}
+      permissions:
+        - group_name: 'Sennen XIO Project'
+          level: CAN_MANAGE
+      continuous: false
+      edition: advanced
+      libraries:
+        - notebook:
+            path: ./silver_layer/silver_dlt_load.py
+
+
+targets:
+  dev:
+    mode: development
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+    variables:
+      ENV: ${workspace.current_user.short_name}_
+      development_prefix: ${workspace.current_user.short_name}_
+      data_catalog: 'oegen_data_prod_test'
+
+  staging:
+    mode: production
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+      root_path: /XIO/DEV/${bundle.name}
+    variables:
+      ENV: 'DEV'
+      development_prefix: 'dev_'
+      data_catalog: 'oegen_data_prod_source'
+    resources:
+      jobs:
+        xio_gems:
+          schedule:
+            quartz_cron_expression: '0 20 7 ? * SUN'   # 07:20 UTC Sunday
+            timezone_id: UTC
+            pause_status: UNPAUSED
+
+  prod:
+    mode: production
+    workspace:
+      host: https://octoenergy-oegen-prod.cloud.databricks.com/
+      root_path: /XIO/PROD/${bundle.name}
+    variables:
+      ENV: ''
+      development_prefix: ''
+      data_catalog: 'oegen_data_prod_prod'
+    resources:
+        jobs:
+          xio_gems:
+            schedule:
+              quartz_cron_expression: '0 0 7 ? * MON-FRI'    # 07:00 UTC MON-FRI
+              timezone_id: UTC
+              pause_status: UNPAUSED
